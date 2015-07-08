@@ -750,8 +750,8 @@ public class BukkitPlotListener implements Listener {
 
     @Subscribe
     public void onPlotWorldLoad(PlotWorldLoadEvent event) {
-        api.getLogger().log(Level.INFO, "Done loading {0} plots for world {1}", new Object[]{event.getNbPlots(), event
-                .getWorldName()});
+        api.getLogger().log(Level.INFO, "Done loading {0} plots for world {1}", new Object[] { event.getNbPlots(),
+                event.getWorld().getName() });
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

@@ -16,8 +16,19 @@ public class PlotWorldLoadEvent implements Event {
      * Returns the world used in the event
      *
      * @return world
+     * @deprecated The actual world is returned
      */
+    @Deprecated
     public IWorld getWorldName() {
+        return world;
+    }
+
+    /**
+     * Returns the world used in the event
+     * 
+     * @return world
+     */
+    public IWorld getWorld() {
         return world;
     }
 
