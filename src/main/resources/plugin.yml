@@ -11,7 +11,7 @@ description: >
 commands:
     plotme:
       description: List PlotMe commands
-      aliases: [p,plot]
+      aliases: [plot]
       permission-message: "You do not have the required permissions to use this PlotMe Command."
 permissions:
     plotme.weanywhere:
