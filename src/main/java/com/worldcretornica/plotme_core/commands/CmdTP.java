@@ -4,7 +4,6 @@ import com.worldcretornica.plotme_core.PermissionNames;
 import com.worldcretornica.plotme_core.Plot;
 import com.worldcretornica.plotme_core.PlotId;
 import com.worldcretornica.plotme_core.PlotMe_Core;
-import com.worldcretornica.plotme_core.api.CommandExBase;
 import com.worldcretornica.plotme_core.api.ICommandSender;
 import com.worldcretornica.plotme_core.api.IPlayer;
 import com.worldcretornica.plotme_core.api.IWorld;
@@ -16,7 +15,7 @@ import java.util.List;
 
 public class CmdTP extends PlotCommand {
 
-    public CmdTP(PlotMe_Core instance, CommandExBase commandExBase) {
+    public CmdTP(PlotMe_Core instance) {
         super(instance);
     }
 
@@ -57,7 +56,7 @@ public class CmdTP extends PlotCommand {
                             plugin.getEventBus().post(event);
 
                             if (!event.isCancelled()) {
-                                player.teleport(location);
+                                player.teleport(location, plugin);
                             }
                         } else {
                             player.sendMessage(C("MsgNoPlotworldFound"));

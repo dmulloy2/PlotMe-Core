@@ -3,7 +3,6 @@ package com.worldcretornica.plotme_core.commands;
 import com.worldcretornica.plotme_core.PermissionNames;
 import com.worldcretornica.plotme_core.Plot;
 import com.worldcretornica.plotme_core.PlotMe_Core;
-import com.worldcretornica.plotme_core.api.CommandExBase;
 import com.worldcretornica.plotme_core.api.ICommandSender;
 import com.worldcretornica.plotme_core.api.IPlayer;
 import com.worldcretornica.plotme_core.api.IWorld;
@@ -15,7 +14,7 @@ import java.util.UUID;
 
 public class CmdInfo extends PlotCommand {
 
-    public CmdInfo(PlotMe_Core instance, CommandExBase commandExBase) {
+    public CmdInfo(PlotMe_Core instance) {
         super(instance);
     }
 
@@ -44,7 +43,10 @@ public class CmdInfo extends PlotCommand {
                     return true;
                 }
                 player.sendMessage("Internal ID: " + plot.getInternalID());
-                player.sendMessage("ID: " + plot.getId().getID() + " " + C("InfoOwner", plot.getOwner()) + " " + C("InfoBiome", plot.getBiome()));
+                player.sendMessage(
+                        "ID: " + plot.getId().getID() + " " + C("InfoOwner", serverBridge.getOfflinePlayer(plot.getOwnerId()).getName()) + " " + C
+                                ("InfoBiome", plot
+                                        .getBiome()));
                 player.sendMessage("Likes: " + plot.getLikes());
                 player.sendMessage("Created: " + plot.getCreatedDate());
                 final String neverExpire = C("InfoExpire") + ": " + C("WordNever");
@@ -126,7 +128,7 @@ public class CmdInfo extends PlotCommand {
                 }
 
                 player.sendMessage(C("WordBottom") + ": " + plot.getPlotBottomLoc().toString());
-                player.sendMessage(C("WordTop") + ": " + plot.getPlotTopLoc());
+                player.sendMessage(C("WordTop") + ": " + plot.getPlotTopLoc().toString());
 
             } else {
                 player.sendMessage(C("NotPlotWorld"));

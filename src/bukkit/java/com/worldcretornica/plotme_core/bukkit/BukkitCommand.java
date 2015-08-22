@@ -2,7 +2,6 @@ package com.worldcretornica.plotme_core.bukkit;
 
 import com.worldcretornica.plotme_core.api.CommandExBase;
 import com.worldcretornica.plotme_core.bukkit.api.BukkitCommandSender;
-import com.worldcretornica.plotme_core.bukkit.api.BukkitPlayer;
 import com.worldcretornica.plotme_core.commands.PlotCommand;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -26,16 +25,12 @@ public class BukkitCommand extends CommandExBase implements CommandExecutor {
                 return commandMap.get("help").execute(plugin.wrapPlayer((Player) sender), args);
             }
             //noinspection ConstantConditions
-            if (args[0] == null || args == null) {
-                api.getLogger().severe("A critical command error occurred.");
-                return false;
-            }
-            PlotCommand _command = commandMap.get(args[0]);
+            PlotCommand _command = commandMap.get(args[0].toLowerCase());
             if (_command == null) {
                 sender.sendMessage("PlotMe does not have a command by that name.");
                 return true;
             } else {
-                return _command.execute(new BukkitPlayer((Player) sender), args);
+                return _command.execute(plugin.wrapPlayer((Player) sender), args);
             }
         } else {
             return handleConsoleCommands(sender, args);

@@ -5,6 +5,7 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.worldcretornica.plotme_core.Plot;
 import com.worldcretornica.plotme_core.PlotId;
+import com.worldcretornica.plotme_core.PlotMeCoreManager;
 import com.worldcretornica.plotme_core.PlotMe_Core;
 import com.worldcretornica.plotme_core.api.IWorld;
 import com.worldcretornica.plotme_core.api.event.PlotLoadEvent;
@@ -19,17 +20,19 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.annotation.Nullable;
 
 public abstract class Database {
 
-    public final Vector<Plot> plots = new Vector<>();
+    public final ConcurrentHashMap<IWorld, HashMap<PlotId, Plot>> plots = new ConcurrentHashMap<>();
     final PlotMe_Core plugin;
     public long nextPlotId = 1;
     Connection connection;
@@ -44,7 +47,11 @@ public abstract class Database {
      * @return all plots
      */
     public List<Plot> getPlots() {
-        return Collections.unmodifiableList(plots);
+        Vector<Plot> allPlots = new Vector<>();
+        for (HashMap<PlotId, Plot> plotIdPlotHashMap : plots.values()) {
+            allPlots.addAll(plotIdPlotHashMap.values());
+        }
+        return allPlots;
     }
 
     /**
@@ -88,13 +95,7 @@ public abstract class Database {
      * @return number of plots in the world
      */
     public int getWorldPlotCount(IWorld world) {
-        int size = 0;
-        for (Plot plot : plots) {
-            if (plot.getWorld().equals(world)) {
-                size++;
-            }
-        }
-        return size;
+        return plots.get(world).size();
     }
 
     /**
@@ -105,14 +106,12 @@ public abstract class Database {
         return plots.size();
     }
 
-    public int getPlotCount(IWorld world, UUID uuid) {
-        int count = 0;
-        for (Plot plot : plots) {
-            if (plot.getOwnerId().equals(uuid) && plot.getWorld().equals(world)) {
-                count++;
+    public int getPlotCount(IWorld world, final UUID uuid) {
+        return Collections2.filter(plots.get(world).values(), new Predicate<Plot>() {
+            @Override public boolean apply(@Nullable Plot input) {
+                return input.getOwnerId().equals(uuid);
             }
-        }
-        return count;
+        }).size();
     }
 
     public void addPlot(Plot plot) {
@@ -121,7 +120,7 @@ public abstract class Database {
     }
 
     private void addPlotToCache(Plot plot) {
-        plots.add(plot);
+        plots.get(plot.getWorld()).put(plot.getId(), plot);
     }
 
     public boolean deletePlot(Plot plot) {
@@ -131,13 +130,8 @@ public abstract class Database {
     }
 
     private boolean deletePlotFromCache(Plot plot) {
-        if (plots.remove(plot)) {
-            plugin.getLogger().info(plots.toString());
-            return true;
-        } else {
-            plugin.getLogger().info(plots.toString());
-            return false;
-        }
+        plots.get(plot.getWorld()).remove(plot.getId());
+        return true;
     }
 
     private void deletePlotFromStorage(Plot plot) {
@@ -148,15 +142,18 @@ public abstract class Database {
         deleteAllFrom(plot.getInternalID(), "plotmecore_plots");
     }
 
-    public void deleteAllFrom(long internalID, String table) {
+    public void deleteAllFrom(final long internalID, final String table) {
         try (Statement statement = getConnection().createStatement()) {
             statement.execute("DELETE FROM " + table + " WHERE plot_id = " + internalID);
             getConnection().commit();
         } catch (SQLException e) {
             plugin.getLogger().severe("Error deleting plot " + internalID + "'s data from table: " + table);
             plugin.getLogger().severe("Details: " + e.getMessage());
+            plugin.getLogger().severe("Error Code: " + e.getErrorCode());
+            plugin.getLogger().severe("SQLState: " + e.getSQLState());
         }
     }
+
 
     /**
      * Placeholder.
@@ -167,11 +164,13 @@ public abstract class Database {
 
     public List<Plot> getPlayerPlots(final UUID uuid) {
         ArrayList<Plot> filter = new ArrayList<>();
-        filter.addAll(Collections2.filter(plots, new Predicate<Plot>() {
+        for (HashMap<PlotId, Plot> plotIdPlotHashMap : plots.values()) {
+            filter.addAll(Collections2.filter(plotIdPlotHashMap.values(), new Predicate<Plot>() {
                 @Override public boolean apply(Plot plot) {
                     return plot.getOwnerId().equals(uuid);
                 }
             }));
+        }
         return ImmutableList.copyOf(filter);
     }
 
@@ -183,7 +182,7 @@ public abstract class Database {
      * @return owned plots. unmodifiable.
      */
     public List<Plot> getOwnedPlots(final IWorld world, final UUID uuid) {
-        Collection<Plot> filter = Collections2.filter(plots, new Predicate<Plot>() {
+        Collection<Plot> filter = Collections2.filter(plots.get(world).values(), new Predicate<Plot>() {
             @Override public boolean apply(Plot plot) {
                 return plot.getOwnerId().equals(uuid) && plot.getWorld().equals(world);
             }
@@ -196,11 +195,11 @@ public abstract class Database {
             @Override
             public void run() {
                 plugin.getLogger().info("Loading plots for world " + world.getName());
-                Vector<Plot> plots2 = getPlots(world);
-                plots.addAll(plots2);
+                HashMap<PlotId, Plot> plots2 = getPlots(world);
+                plots.put(world, plots2);
                 PlotWorldLoadEvent eventWorld = new PlotWorldLoadEvent(world, plots2.size());
                 plugin.getEventBus().post(eventWorld);
-                for (Plot plot : plots2) {
+                for (Plot plot : plots2.values()) {
                     PlotLoadEvent event = new PlotLoadEvent(plot);
                     plugin.getEventBus().post(event);
 
@@ -208,8 +207,8 @@ public abstract class Database {
 
             }
 
-            private Vector<Plot> getPlots(IWorld world) {
-                Vector<Plot> ret = new Vector<>();
+            private HashMap<PlotId, Plot> getPlots(IWorld world) {
+                HashMap<PlotId, Plot> ret = new HashMap<>();
                 Connection connection = getConnection();
                 try (PreparedStatement statementPlot = connection.prepareStatement("SELECT * FROM plotmecore_plots WHERE LOWER(world) = ?");
                         PreparedStatement statementAllowed = connection.prepareStatement("SELECT * FROM plotmecore_allowed WHERE plot_id = ?");
@@ -235,9 +234,9 @@ public abstract class Database {
                             String plotName = setPlots.getString("plotName");
                             int plotLikes = setPlots.getInt("plotLikes");
                             com.worldcretornica.plotme_core.api.Vector
-                                    topLoc = new com.worldcretornica.plotme_core.api.Vector(setPlots.getInt("topX"), 255, setPlots.getInt("topZ"));
+                                    topLoc = PlotMeCoreManager.getInstance().getPlotTopLoc(world, id);
                             com.worldcretornica.plotme_core.api.Vector bottomLoc =
-                                    new com.worldcretornica.plotme_core.api.Vector(setPlots.getInt("bottomX"), 0, setPlots.getInt("bottomZ"));
+                                    PlotMeCoreManager.getInstance().getPlotBottomLoc(world, id);
                             HashMap<String, Map<String, String>> metadata = new HashMap<>();
                             HashMap<String, Plot.AccessLevel> allowed = new HashMap<>();
                             HashSet<String> denied = new HashSet<>();
@@ -278,12 +277,15 @@ public abstract class Database {
                                     new Plot(internalID, owner, ownerId, world, biome, expiredDate, allowed, denied,
                                             likers, id, price, forSale, finished, finishedDate, protect, metadata, plotLikes, plotName, topLoc,
                                             bottomLoc, createdDate);
-                            ret.add(plot);
+                            ret.put(plot.getId(), plot);
                         }
                     }
                 } catch (SQLException ex) {
                     plugin.getLogger().severe("Load exception :");
                     plugin.getLogger().severe(ex.getMessage());
+                    plugin.getLogger().severe("Details: " + ex.getMessage());
+                    plugin.getLogger().severe("Error Code: " + ex.getErrorCode());
+                    plugin.getLogger().severe("SQLState: " + ex.getSQLState());
                 }
                 return ret;
             }
@@ -291,17 +293,12 @@ public abstract class Database {
     }
 
     public Plot getPlot(PlotId id, IWorld world) {
-        for (Plot plot : plots) {
-            if (plot.getId().equals(id) && plot.getWorld().equals(world)) {
-                return plot;
-            }
-        }
-        return null;
+        return plots.get(world).get(id);
     }
 
 
     public List<Plot> getExpiredPlots(final IWorld world) {
-        Collection<Plot> filter = Collections2.filter(plots, new Predicate<Plot>() {
+        Collection<Plot> filter = Collections2.filter(plots.get(world).values(), new Predicate<Plot>() {
             @Override public boolean apply(Plot plot) {
                 return plot.getExpiredDate() != null && Calendar.getInstance().getTime().after(plot.getExpiredDate()) && plot.getWorld().equals
                         (world);
@@ -311,7 +308,7 @@ public abstract class Database {
     }
 
     public List<Plot> getFinishedPlots(final IWorld world) {
-        Collection<Plot> filter = Collections2.filter(plots, new Predicate<Plot>() {
+        Collection<Plot> filter = Collections2.filter(plots.get(world).values(), new Predicate<Plot>() {
             @Override public boolean apply(Plot plot) {
                 return plot.isFinished() && plot.getWorld().equals(world);
             }
@@ -324,9 +321,8 @@ public abstract class Database {
         this.setNextPlotId(this.nextPlotId + 1);
     }
 
-    public void setNextPlotId(long id) {
+    public void setNextPlotId(final long id) {
         this.nextPlotId = id;
-
         try (Statement statement = getConnection().createStatement()) {
             statement.execute("DELETE FROM plotmecore_nextid;");
             statement.execute("INSERT INTO plotmecore_nextid VALUES (" + id + ");");
@@ -344,12 +340,14 @@ public abstract class Database {
         writePlotToStorage(plot);
     }
 
-    private void writePlotToStorage(Plot plot) {
+    private void writePlotToStorage(final Plot plot) {
         //first delete the plot (if exists) from the database
         deletePlotFromStorage(plot);
         try (PreparedStatement ps = getConnection().prepareStatement(
-                "INSERT INTO plotmecore_plots(plot_id,plotX, plotZ, world, ownerID, owner, biome, finished, finishedDate, forSale, price, protected, "
-                        + "expiredDate, topX, topZ, bottomX, bottomZ, plotLikes, createdDate) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
+                "INSERT INTO plotmecore_plots(plot_id,plotX, plotZ, world, ownerID, owner, biome, finished, finishedDate, forSale, price, "
+                        + "protected, "
+                        + "expiredDate, topX, topZ, bottomX, bottomZ, plotLikes, createdDate) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+                        + "?)")) {
             ps.setLong(1, plot.getInternalID());
             ps.setInt(2, plot.getId().getX());
             ps.setInt(3, plot.getId().getZ());
@@ -371,9 +369,13 @@ public abstract class Database {
             ps.setString(19, plot.getCreatedDate());
             ps.executeUpdate();
             getConnection().commit();
-        } catch (SQLException ex) {
+        } catch (SQLException e) {
             plugin.getLogger().severe("Insert Exception :");
-            plugin.getLogger().severe(ex.getMessage());
+            plugin.getLogger().severe(e.getMessage());
+            plugin.getLogger().severe("Details: " + e.getMessage());
+            plugin.getLogger().severe("Error Code: " + e.getErrorCode());
+            plugin.getLogger().severe("SQLState: " + e.getSQLState());
+
         }
         for (String denied : plot.getDenied()) {
             try (PreparedStatement ps = getConnection()
@@ -384,10 +386,13 @@ public abstract class Database {
                 getConnection().commit();
             } catch (SQLException e) {
                 plugin.getLogger().severe("Error adding allowed data for plot with internal id " + plot.getInternalID());
+                plugin.getLogger().severe("Details: " + e.getMessage());
+                plugin.getLogger().severe("Error Code: " + e.getErrorCode());
+                plugin.getLogger().severe("SQLState: " + e.getSQLState());
+
                 e.printStackTrace();
             }
         }
-
         for (Map.Entry<String, Plot.AccessLevel> member : plot.getMembers().entrySet()) {
             try (PreparedStatement ps = getConnection()
                     .prepareStatement("INSERT INTO plotmecore_allowed (plot_id, player, access) VALUES(?,?, ?)")) {
@@ -398,10 +403,13 @@ public abstract class Database {
                 getConnection().commit();
             } catch (SQLException e) {
                 plugin.getLogger().severe("Error adding allowed data for plot with internal id " + plot.getInternalID());
+                plugin.getLogger().severe("Details: " + e.getMessage());
+                plugin.getLogger().severe("Error Code: " + e.getErrorCode());
+                plugin.getLogger().severe("SQLState: " + e.getSQLState());
+
                 e.printStackTrace();
             }
         }
-
         for (UUID player : plot.getLikers()) {
             try (PreparedStatement ps = getConnection()
                     .prepareStatement("INSERT INTO plotmecore_likes (plot_id, player) VALUES(?, ?)")) {
@@ -411,23 +419,28 @@ public abstract class Database {
                 getConnection().commit();
             } catch (SQLException e) {
                 plugin.getLogger().severe("Error adding allowed data for plot with internal id " + plot.getInternalID());
+                plugin.getLogger().severe("Details: " + e.getMessage());
+                plugin.getLogger().severe("Error Code: " + e.getErrorCode());
+                plugin.getLogger().severe("SQLState: " + e.getSQLState());
                 e.printStackTrace();
             }
         }
         for (Map.Entry<String, Map<String, String>> metadata : plot.getAllPlotProperties().entrySet()) {
             for (Map.Entry<String, String> stringStringEntry : metadata.getValue().entrySet()) {
-                try (PreparedStatement ps = getConnection().prepareStatement("INSERT INTO plotmecore_metadata(plot_id, pluginName, propertyName, "
-                        + "propertyValue) VALUES (?,?,?,?)")) {
+                try (PreparedStatement ps = getConnection()
+                        .prepareStatement("INSERT INTO plotmecore_metadata(plot_id, pluginName, propertyName, "
+                                + "propertyValue) VALUES (?,?,?,?)")) {
                     ps.setLong(1, plot.getInternalID());
                     ps.setString(2, metadata.getKey());
                     ps.setString(3, stringStringEntry.getKey());
                     ps.setString(4, stringStringEntry.getValue());
                 } catch (SQLException e) {
+                    plugin.getLogger().severe("Details: " + e.getMessage());
+                    plugin.getLogger().severe("Error Code: " + e.getErrorCode());
+                    plugin.getLogger().severe("SQLState: " + e.getSQLState());
                     e.printStackTrace();
                 }
-
             }
-
         }
     }
 }

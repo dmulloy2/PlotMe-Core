@@ -4,7 +4,6 @@ import com.worldcretornica.plotme_core.PermissionNames;
 import com.worldcretornica.plotme_core.PlotId;
 import com.worldcretornica.plotme_core.PlotMapInfo;
 import com.worldcretornica.plotme_core.PlotMe_Core;
-import com.worldcretornica.plotme_core.api.CommandExBase;
 import com.worldcretornica.plotme_core.api.ICommandSender;
 import com.worldcretornica.plotme_core.api.IPlayer;
 import com.worldcretornica.plotme_core.api.IWorld;
@@ -14,7 +13,7 @@ import java.util.UUID;
 
 public class CmdAuto extends PlotCommand {
 
-    public CmdAuto(PlotMe_Core instance, CommandExBase commandExBase) {
+    public CmdAuto(PlotMe_Core instance) {
         super(instance);
     }
 
@@ -27,18 +26,14 @@ public class CmdAuto extends PlotCommand {
         if (player.hasPermission(PermissionNames.USER_AUTO)) {
             if (manager.isPlotWorld(player) || plugin.getConfig().getBoolean("allowWorldTeleport")) {
                 final IWorld world;
-                if (!manager.isPlotWorld(player) && plugin.getConfig().getBoolean("allowWorldTeleport")) {
-                    if (args.length == 2) {
-                        world = manager.getWorld(args[1]);
-                    } else {
-                        world = manager.getFirstWorld();
-                    }
+                if (plugin.getConfig().getBoolean("allowWorldTeleport") && args.length == 2) {
+                    world = manager.getWorld(args[1]);
                     if (world == null) {
                         player.sendMessage(C("NotPlotWorld"));
                         return true;
                     }
                     if (!manager.isPlotWorld(world)) {
-                        player.sendMessage(C("MsgWorldNotPlot", world));
+                        player.sendMessage(C("NotPlotWorld"));
                         return true;
                     }
                 } else {
@@ -86,10 +81,9 @@ public class CmdAuto extends PlotCommand {
                                             }
                                         });
 
-                                        player.teleport(manager.getPlotHome(id, world));
+                                        player.teleport(manager.getPlotHome(id, world), plugin);
 
-                                        player.sendMessage(C("MsgThisPlotYours") + " " + C("WordUse") + " /plotme home" + " " + C
-                                                ("MsgToGetToIt"));
+                                        player.sendMessage(C("MsgThisPlotYours") + " " + C("WordUse") + " /plotme home" + " " + C("MsgToGetToIt"));
                                         break loop;
                                     }
                                 }

@@ -17,6 +17,7 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import javax.inject.Singleton;
@@ -387,7 +388,8 @@ public class PlotMeCoreManager {
      * @return plotworld
      */
     public IWorld getFirstWorld() {
-        return (IWorld) getPlotMaps().keySet().toArray()[0];
+        Set<IWorld> iWorlds = getPlotMaps().keySet();
+        return iWorlds.toArray(new IWorld[iWorlds.size()])[0];
     }
 
     /**
@@ -540,6 +542,7 @@ public class PlotMeCoreManager {
         if (plugin.getServerBridge().isUsingLwc()) {
             removeLWC(plot);
         }
+        getGenManager(plot.getWorld()).clearEntities(plot.getPlotBottomLoc(), plot.getPlotTopLoc());
         if (reason.equals(ClearReason.Clear)) {
             adjustWall(plot, true);
         } else {
@@ -669,25 +672,11 @@ public class PlotMeCoreManager {
     }
 
     public void UpdatePlayerNameFromId(final UUID uuid, final String name) {
-        plugin.getServerBridge().runTaskAsynchronously(new Runnable() {
-            @Override
-            public void run() {
-                for (final Plot plot : plugin.getSqlManager().plots) {
-                        if (plot.getOwnerId().equals(uuid)) {
-                            plot.setOwner(name);
-                            final int i = plugin.getSqlManager().plots.indexOf(plot);
-                            plugin.getSqlManager().plots.get(i).setOwner(name);
-                            plugin.getSqlManager().savePlot(plot);
-                            plugin.getServerBridge().runTask(new Runnable() {
-                                @Override public void run() {
-                                    setOwnerSign(plot);
-                                }
-                            });
-                        }
-                    }
-            }
-        });
+        for (final Plot plot : plugin.getSqlManager().getPlayerPlots(uuid)) {
+            setOwnerSign(plot);
+        }
     }
+
 
     public IOfflinePlayer getPlayer(String name) {
         return plugin.getServerBridge().getPlayer(name);
@@ -710,8 +699,8 @@ public class PlotMeCoreManager {
     }
 
     public IWorld getWorld(String world) {
-        for(IWorld iw : getPlotMaps().keySet()) {
-            if(iw.getName().equalsIgnoreCase(world)) {
+        for (IWorld iw : getPlotMaps().keySet()) {
+            if (iw.getName().equalsIgnoreCase(world)) {
                 return iw;
             }
         }

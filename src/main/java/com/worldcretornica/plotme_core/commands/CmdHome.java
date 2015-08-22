@@ -4,7 +4,6 @@ import com.worldcretornica.plotme_core.PermissionNames;
 import com.worldcretornica.plotme_core.Plot;
 import com.worldcretornica.plotme_core.PlotMapInfo;
 import com.worldcretornica.plotme_core.PlotMe_Core;
-import com.worldcretornica.plotme_core.api.CommandExBase;
 import com.worldcretornica.plotme_core.api.ICommandSender;
 import com.worldcretornica.plotme_core.api.IOfflinePlayer;
 import com.worldcretornica.plotme_core.api.IPlayer;
@@ -19,7 +18,7 @@ import java.util.UUID;
 
 public class CmdHome extends PlotCommand {
 
-    public CmdHome(PlotMe_Core instance, CommandExBase commandExBase) {
+    public CmdHome(PlotMe_Core instance) {
         super(instance);
     }
 
@@ -110,7 +109,7 @@ public class CmdHome extends PlotCommand {
                                 }
 
                                 if (!event.isCancelled()) {
-                                    player.teleport(event.getHomeLocation());
+                                    player.teleport(event.getHomeLocation(), plugin);
 
                                     if (price != 0) {
                                         player.sendMessage(serverBridge.getEconomy().get().format(price));
